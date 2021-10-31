@@ -535,7 +535,8 @@ instance Pretty Instruction where
     Load {..}   -> "load" <+> ppMAtomicity maybeAtomicity <+> ppVolatile volatile <+> pretty argTy `cma` ppTyped address <+> ppMOrdering maybeAtomicity <> ppAlign alignment <+> ppInstrMeta metadata
       where
         argTy = case typeOf address of
-          PointerType argTy_ _ -> argTy_
+          Right (PointerType argTy_ _) -> argTy_
+          Left e -> error e
           _ -> error "invalid load of non-pointer type. (Malformed AST)"
     Phi {..}    -> "phi" <+> pretty type' <+> commas (fmap phiIncoming incomingValues) <+> ppInstrMeta metadata
 
@@ -550,7 +551,7 @@ instance Pretty Instruction where
     FPTrunc {..}  -> "fptrunc" <+> ppTyped operand0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata
 
     GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (pretty argTy : fmap ppTyped (address:indices)) <+> ppInstrMeta metadata
-      where argTy = getElementType $ typeOf address
+      where argTy = getElementType $ either error id $ typeOf address
     ExtractValue {..} -> "extractvalue" <+> commas (ppTyped aggregate : fmap pretty indices') <+> ppInstrMeta metadata
 
     BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata
@@ -1130,7 +1131,8 @@ instance Pretty C.Constant where
   pretty C.GetElementPtr {..} = "getelementptr" <+> bounds inBounds <+> parens (commas (pretty argTy : fmap ppTyped (address:indices)))
     where
       argTy = case typeOf address of
-        PointerType argTy_ _ -> argTy_
+        Right (PointerType argTy_ _) -> argTy_
+        Left e -> error e
         _ -> error "invalid load of non-pointer type. (Malformed AST)"
       bounds True = "inbounds"
       bounds False = mempty
@@ -1317,7 +1319,8 @@ ppCall Call { function = Right f,..}
     <+> pretty f <> parens (commas $ fmap ppArguments arguments) <+> ppFunctionAttributes functionAttributes
     where
       functionType = case (referencedType (typeOf f)) of
-                       fty@FunctionType {..} -> fty
+                       Right (fty@FunctionType {..}) -> fty
+                       Left e -> error e
                        _ -> error "Calling non function type. (Malformed AST)"
       resultType' = resultType functionType
       ftype = if isVarArg functionType
@@ -1360,7 +1363,8 @@ ppInvoke Invoke { function' = Right f,..}
     <+> pretty f <> parens (commas $ fmap ppArguments arguments') <+> ppFunctionAttributes functionAttributes'
     where
       functionType = case referencedType (typeOf f) of
-                       fty@FunctionType{..} -> fty
+                       Right (fty@FunctionType{..}) -> fty
+                       Left e -> error e
                        _ -> error "Invoking non-function type. (Malformed AST)"
       resultType' = resultType functionType
       ftype = if isVarArg functionType
